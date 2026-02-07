@@ -4,7 +4,21 @@ import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
 
 const configPath = path.resolve("config.json");
-const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+let fileConfig = {};
+if (fs.existsSync(configPath)) {
+  try {
+    fileConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  } catch (err) {
+    console.error("Failed to read config.json", err);
+  }
+}
+
+const config = {
+  token: process.env.DISCORD_TOKEN || fileConfig.token,
+  guildId: process.env.DISCORD_GUILD_ID || fileConfig.guildId,
+  port: Number(process.env.PORT || fileConfig.port || 3000),
+  secret: process.env.BOT_SECRET || fileConfig.secret
+};
 
 const dataDir = path.resolve("data");
 const linksFile = path.join(dataDir, "links.json");
