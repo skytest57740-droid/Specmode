@@ -100,6 +100,71 @@ app.post("/move", async (req, res) => {
   }
 });
 
+app.post("/dispatch", async (req, res) => {
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const { moves } = req.body || {};
+  if (!Array.isArray(moves) || moves.length === 0) {
+    return res.status(400).json({ error: "missing_moves" });
+  }
+  try {
+    const guild = await client.guilds.fetch(config.guildId);
+    const channelCache = new Map();
+    let moved = 0;
+    let notLinked = 0;
+    let notInVoice = 0;
+    let invalidChannel = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const move of moves) {
+      if (!move || !move.uuid || !move.channelId) {
+        skipped++;
+        continue;
+      }
+      const discordId = links[move.uuid];
+      if (!discordId) {
+        notLinked++;
+        continue;
+      }
+      try {
+        const member = await guild.members.fetch(discordId);
+        if (!member.voice || !member.voice.channelId) {
+          notInVoice++;
+          continue;
+        }
+        let channel = channelCache.get(move.channelId);
+        if (!channel) {
+          channel = await guild.channels.fetch(move.channelId);
+          channelCache.set(move.channelId, channel || null);
+        }
+        if (!channel || !channel.isVoiceBased()) {
+          invalidChannel++;
+          continue;
+        }
+        await member.voice.setChannel(channel);
+        moved++;
+      } catch (err) {
+        errors++;
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      moved,
+      notLinked,
+      notInVoice,
+      invalidChannel,
+      skipped,
+      errors
+    });
+  } catch (err) {
+    console.error("Dispatch error", err);
+    return res.status(500).json({ error: "dispatch_failed" });
+  }
+});
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
