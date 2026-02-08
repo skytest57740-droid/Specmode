@@ -1,9 +1,13 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
 
-const configPath = path.resolve("config.json");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const configPath = path.resolve(__dirname, "config.json");
 let fileConfig = {};
 if (fs.existsSync(configPath)) {
   try {
@@ -20,7 +24,7 @@ const config = {
   secret: process.env.BOT_SECRET || fileConfig.secret
 };
 
-const dataDir = path.resolve("data");
+const dataDir = path.resolve(__dirname, "data");
 const linksFile = path.join(dataDir, "links.json");
 
 if (!fs.existsSync(dataDir)) {
@@ -49,6 +53,13 @@ function isAuthorized(req) {
 
 const app = express();
 app.use(express.json());
+app.use((err, req, res, next) => {
+  if (err) {
+    console.error("JSON parse error", err);
+    return res.status(400).json({ error: "invalid_json" });
+  }
+  next();
+});
 
 app.get("/health", (req, res) => {
   res.status(200).send("ok");
@@ -203,7 +214,23 @@ client.on("messageCreate", async (message) => {
   await message.reply("Link complete. You can return in game.");
 });
 
-client.login(config.token);
+if (!config.token) {
+  console.error("Missing Discord token: set DISCORD_TOKEN or config.json token.");
+} else {
+  client.login(config.token);
+}
+
+if (!config.guildId) {
+  console.error("Missing guildId: set DISCORD_GUILD_ID or config.json guildId.");
+}
+
+if (!config.secret) {
+  console.error("Missing bot secret: set BOT_SECRET or config.json secret.");
+}
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection", err);
+});
 
 app.listen(config.port, () => {
   console.log(`HTTP server on :${config.port}`);
